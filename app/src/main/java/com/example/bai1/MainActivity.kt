@@ -1,48 +1,76 @@
 package com.example.bai1
 
+import android.app.Activity
+import android.content.Intent
 import android.os.Bundle
-import android.widget.Button
-import android.widget.EditText
+import android.view.Menu
+import android.view.MenuItem
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var inputStudentId: EditText
-    private lateinit var inputFullName: EditText
-    private lateinit var btnSave: Button
-    private lateinit var btnModify: Button
     private lateinit var listStudents: RecyclerView
-
     private val danhSachSV = mutableListOf<SinhVien>()
     private lateinit var svAdapter: SinhVienAdapter
-    private var selectedPosition = -1
+
+    // Activity result launcher để thêm sinh viên
+    private val addStudentLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val sinhVien = result.data?.getParcelableExtra<SinhVien>("sinhvien")
+            sinhVien?.let {
+                // Kiểm tra MSSV trùng
+                if (danhSachSV.any { sv -> sv.mssv == it.mssv }) {
+                    Toast.makeText(this, "MSSV đã tồn tại", Toast.LENGTH_SHORT).show()
+                    return@registerForActivityResult
+                }
+                
+                danhSachSV.add(it)
+                svAdapter.notifyItemInserted(danhSachSV.size - 1)
+                Toast.makeText(this, "Đã thêm sinh viên", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    // Activity result launcher để cập nhật sinh viên
+    private val updateStudentLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val sinhVien = result.data?.getParcelableExtra<SinhVien>("sinhvien")
+            val position = result.data?.getIntExtra("position", -1) ?: -1
+            
+            if (sinhVien != null && position != -1 && position < danhSachSV.size) {
+                danhSachSV[position] = sinhVien
+                svAdapter.notifyItemChanged(position)
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // Ánh xạ view theo layout mới
-        inputStudentId = findViewById(R.id.inputStudentId)
-        inputFullName = findViewById(R.id.inputFullName)
-        btnSave = findViewById(R.id.btnSave)
-        btnModify = findViewById(R.id.btnModify)
+        // Setup ActionBar
+        supportActionBar?.title = "Danh sách sinh viên"
+
+        // Ánh xạ view
         listStudents = findViewById(R.id.listStudents)
 
-        // Dữ liệu mẫu mới — tránh bị nhận diện sao chép
+        // Dữ liệu mẫu
         taoDanhSachMau()
 
-        // Adapter cùng callback
+        // Adapter với callback
         svAdapter = SinhVienAdapter(
             sinhVienList = danhSachSV,
             onItemClick = { position ->
-                val sv = danhSachSV[position]
-                inputStudentId.setText(sv.mssv)
-                inputFullName.setText(sv.hoTen)
-                inputStudentId.isEnabled = false
-                selectedPosition = position
+                // Mở activity chi tiết sinh viên
+                openStudentDetail(position)
             },
             onDeleteClick = { position ->
                 xoaSinhVien(position)
@@ -52,83 +80,46 @@ class MainActivity : AppCompatActivity() {
         // RecyclerView
         listStudents.layoutManager = LinearLayoutManager(this)
         listStudents.adapter = svAdapter
+    }
 
-        // Button thêm
-        btnSave.setOnClickListener {
-            themSinhVien()
-        }
+    override fun onCreateOptionsMenu(menu: Menu?): Boolean {
+        menuInflater.inflate(R.menu.main_menu, menu)
+        return true
+    }
 
-        // Button cập nhật
-        btnModify.setOnClickListener {
-            capNhatSinhVien()
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.menu_add_student -> {
+                openAddStudent()
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
         }
     }
 
-    private fun themSinhVien() {
-        val mssv = inputStudentId.text.toString().trim()
-        val hoTen = inputFullName.text.toString().trim()
-
-        if (mssv.isEmpty() || hoTen.isEmpty()) {
-            Toast.makeText(this, "Vui lòng nhập đầy đủ thông tin", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        if (danhSachSV.any { it.mssv == mssv }) {
-            Toast.makeText(this, "MSSV đã tồn tại", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        danhSachSV.add(SinhVien(mssv, hoTen))
-        svAdapter.notifyItemInserted(danhSachSV.size - 1)
-        clearInput()
-
-        Toast.makeText(this, "Đã thêm sinh viên", Toast.LENGTH_SHORT).show()
+    private fun openAddStudent() {
+        val intent = Intent(this, AddStudentActivity::class.java)
+        addStudentLauncher.launch(intent)
     }
 
-    private fun capNhatSinhVien() {
-        if (selectedPosition == -1) {
-            Toast.makeText(this, "Hãy chọn sinh viên để cập nhật", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        val name = inputFullName.text.toString().trim()
-
-        if (name.isEmpty()) {
-            Toast.makeText(this, "Tên không được bỏ trống", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        danhSachSV[selectedPosition].hoTen = name
-        svAdapter.notifyItemChanged(selectedPosition)
-        clearInput()
-
-        Toast.makeText(this, "Cập nhật thành công", Toast.LENGTH_SHORT).show()
+    private fun openStudentDetail(position: Int) {
+        val intent = Intent(this, StudentDetailActivity::class.java)
+        intent.putExtra("sinhvien", danhSachSV[position])
+        intent.putExtra("position", position)
+        updateStudentLauncher.launch(intent)
     }
 
     private fun xoaSinhVien(position: Int) {
         danhSachSV.removeAt(position)
         svAdapter.notifyItemRemoved(position)
-
-        if (position == selectedPosition) {
-            clearInput()
-        }
-
         Toast.makeText(this, "Đã xóa sinh viên", Toast.LENGTH_SHORT).show()
     }
 
-    private fun clearInput() {
-        inputStudentId.text.clear()
-        inputFullName.text.clear()
-        inputStudentId.isEnabled = true
-        selectedPosition = -1
-        inputStudentId.requestFocus()
-    }
-
     private fun taoDanhSachMau() {
-        danhSachSV.add(SinhVien("SV10001", "Phan Minh Khôi"))
-        danhSachSV.add(SinhVien("SV10002", "Lưu Hồng Ngọc"))
-        danhSachSV.add(SinhVien("SV10003", "Tạ Quốc Dũng"))
-        danhSachSV.add(SinhVien("SV10004", "Ngô Mỹ Thanh"))
-        danhSachSV.add(SinhVien("SV10005", "Đoàn Tuấn Kiệt"))
+        danhSachSV.add(SinhVien("SV10001", "Phan Minh Khôi", "0912345678", "Hà Nội"))
+        danhSachSV.add(SinhVien("SV10002", "Lưu Hồng Ngọc", "0923456789", "Hải Phòng"))
+        danhSachSV.add(SinhVien("SV10003", "Tạ Quốc Dũng", "0934567890", "Đà Nẵng"))
+        danhSachSV.add(SinhVien("SV10004", "Ngô Mỹ Thanh", "0945678901", "TP HCM"))
+        danhSachSV.add(SinhVien("SV10005", "Đoàn Tuấn Kiệt", "0956789012", "Cần Thơ"))
     }
 }

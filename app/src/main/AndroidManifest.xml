@@ -22,6 +22,20 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        
+        <activity
+            android:name=".AddStudentActivity"
+            android:exported="false"
+            android:label="Thêm sinh viên"
+            android:parentActivityName=".MainActivity"
+            android:theme="@style/Theme.Bai1" />
+            
+        <activity
+            android:name=".StudentDetailActivity"
+            android:exported="false"
+            android:label="Chi tiết sinh viên"
+            android:parentActivityName=".MainActivity"
+            android:theme="@style/Theme.Bai1" />
     </application>
 
 </manifest>
